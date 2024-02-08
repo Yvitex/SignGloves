@@ -5,10 +5,19 @@
 #endif
 #include <SoftwareSerial.h>
 
+// Configurations
+int toleranceRotation = 10;
+int toleranceAcc = 100;
+int toleranceFlex = 30;
+int speed = 100;
+int streamLimit = 10;
+
 MPU6050 mpu;
 
 #define OUTPUT_READABLE_YAWPITCHROLL
 #define OUTPUT_READABLE_REALACCEL
+
+// Data CSV should look like this [Finger1, Finger2, Finger3, Finger4, Finger5, Y, P, R, AX, AY, AZ]
 
 uint8_t devStatus;   
 uint8_t fifoBuffer[64];
@@ -28,36 +37,38 @@ float r;
 float ax;
 float ay;
 float az;
-float valFinger1;
-float valFinger2;
-float valFinger3;
-float valFinger4;
-float valFinger5;
+
+int valFingers[5];
 
 // Temporaries
 float tempYprMovement = 0;
+float tempAxyMovement = 0;
+int tempFingerMovement = 0;
+int dataCountSent = 0;
+
 float yprMovement;
 float axyMovement;
-float tempAxyMovement = 0;
+int fingerMovement;
 int falseCounter = 0;
-bool isMoving = false;
 char bluetoothInput;
 bool ledOn = false;
+bool isMoving = false;
+bool debugSwitch = false;
 
-// Configurations
-int toleranceRotation = 2;
-int toleranceAcc = 100;
+// Pin outs
 int altTxPin = 9;
 int altRxPin = 8;
 int led = 2;
 
+int sukunaFingers[5] = {0, 1, 2, 3, 6};
+
 SoftwareSerial mySerial(altTxPin, altRxPin);
 
 void setup() {
-  mySerial.begin(115200);
-  Serial.begin(115200);
+  mySerial.begin(9600);
+  Serial.begin(9600);
   mySerial.println("Testicle Flex");
-  pinMode(led, OUTPUT)
+  pinMode(led, OUTPUT);
 
   Wire.begin();
   mpu.initialize();
@@ -86,7 +97,7 @@ void setup() {
 }
 
 void loop() {
-  delay(200);
+  delay(speed);
 
   if (mySerial.available()) {
     bluetoothInput = mySerial.read();
@@ -99,18 +110,14 @@ void loop() {
   } else if (bluetoothInput == 'f') {
     digitalWrite(led, LOW);
     Serial.println("Pressed Off");
+  } else if (bluetoothInput == 's') {
+    debugSwitch = !debugSwitch;
   }
 
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
-    valFinger1 = analogRead(firstFinger);
-    valFinger2 = analogRead(secondFinger);
-    valFinger3 = analogRead(thirdFinger);
-    valFinger4 = analogRead(fourthFinger);
-    valFinger5 = analogRead(fifthFinger);
 
     y = ypr[0] * 180/M_PI;
     p = ypr[1] * 180/M_PI;
@@ -126,11 +133,17 @@ void loop() {
     ay = aaReal.y;
     az = aaReal.z;
 
-    yprMovement = sqrt((y*y + p*p + r*r));
-
-    axyMovement = sqrt((ax*ax + ay*ay + az*az));
+    valFingers[0] = analogRead(sukunaFingers[0]);
+    valFingers[1] = analogRead(sukunaFingers[1]);
+    valFingers[2] = analogRead(sukunaFingers[2]);
+    valFingers[3] = analogRead(sukunaFingers[3]);
+    valFingers[4] = analogRead(sukunaFingers[4]);
     
-    if (abs(tempAxyMovement - axyMovement) > toleranceAcc || abs(tempYprMovement - yprMovement) > toleranceRotation) {
+    yprMovement = sqrt((y*y + p*p + r*r));
+    axyMovement = sqrt((ax*ax + ay*ay + az*az));
+    fingerMovement = sqrt((sq(valFingers[0]) + sq(valFingers[1]) + sq(valFingers[2]) + sq(valFingers[3]) + sq(valFingers[4])));
+
+    if (abs(tempAxyMovement - axyMovement) > toleranceAcc || abs(tempYprMovement - yprMovement) > toleranceRotation || abs(tempFingerMovement - fingerMovement) > toleranceFlex) {
       isMoving = true;
       falseCounter = 0;
     } else {
@@ -138,27 +151,46 @@ void loop() {
       falseCounter += 1;
     }
 
-    if (isMoving && falseCounter < 3) {
-      mySerial.print(y);Serial.print(",");
-      mySerial.print(p);Serial.print(",");
-      mySerial.print(r);Serial.print(",");
-      mySerial.print(ax);Serial.print(",");
-      mySerial.print(ay);Serial.print(",");
-      mySerial.print(valFinger1);
-      mySerial.print(",");
-      mySerial.print(valFinger2);
-      mySerial.print(",");
-      mySerial.print(valFinger3);
-      mySerial.print(",");
-      mySerial.print(valFinger4);
-      mySerial.print(",");
-      mySerial.print(valFinger5);
-      mySerial.println();
+    if (isMoving && falseCounter < streamLimit && debugSwitch) {
+      mySerial.print(y);mySerial.print(",");
+      mySerial.print(p);mySerial.print(",");
+      mySerial.print(r);mySerial.print(",");
+      mySerial.print(ax);mySerial.print(",");
+      mySerial.print(ay);mySerial.print(",");
+      mySerial.print(valFingers[0]);mySerial.print(",");
+      mySerial.print(valFingers[1]);mySerial.print(",");
+      mySerial.print(valFingers[2]);mySerial.print(",");
+      mySerial.print(valFingers[3]);mySerial.print(",");
+      mySerial.print(valFingers[4]);mySerial.println();
+    }
+
+    if (isMoving && falseCounter < streamLimit && !debugSwitch) {
+      Serial.print(y);Serial.print(",");
+      Serial.print(p);Serial.print(",");
+      Serial.print(r);Serial.print(",");
+      Serial.print(ax);Serial.print(",");
+      Serial.print(ay);Serial.print(",");
+      Serial.print(valFingers[0]);Serial.print(",");
+      Serial.print(valFingers[1]);Serial.print(",");
+      Serial.print(valFingers[2]);Serial.print(",");
+      Serial.print(valFingers[3]);Serial.print(",");
+      Serial.print(valFingers[4]);Serial.println();
+    }
+    
+    if (isMoving && falseCounter < streamLimit) {
+      digitalWrite(led, HIGH);
+      dataCountSent += 1;
+    } else {
+      digitalWrite(led, LOW);
+      Serial.print("Data Sent: ");
+      Serial.println(dataCountSent);
+      dataCountSent = 0;
     }
 
     tempYprMovement = yprMovement;
     tempAxyMovement = axyMovement;
-
+    tempFingerMovement = fingerMovement;
+    
   }
 
 }
