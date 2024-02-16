@@ -54,12 +54,13 @@ char bluetoothInput;
 bool ledOn = false;
 bool isMoving = false;
 bool debugSwitch = false;
+bool isContinuousMode = false;
 
 // Pin outs
 int altTxPin = 9;
 int altRxPin = 8;
+int button = 3;
 int led = 2;
-
 int sukunaFingers[5] = {0, 1, 2, 3, 6};
 
 SoftwareSerial mySerial(altTxPin, altRxPin);
@@ -69,6 +70,7 @@ void setup() {
   Serial.begin(9600);
   mySerial.println("Testicle Flex");
   pinMode(led, OUTPUT);
+  pinMode(button, INPUT);
 
   Wire.begin();
   mpu.initialize();
@@ -104,14 +106,25 @@ void loop() {
     Serial.println(bluetoothInput);
   }
 
-  if (bluetoothInput == 'o') {
-    digitalWrite(led, HIGH);
-    Serial.println("Pressed On");
-  } else if (bluetoothInput == 'f') {
-    digitalWrite(led, LOW);
-    Serial.println("Pressed Off");
-  } else if (bluetoothInput == 's') {
-    debugSwitch = !debugSwitch;
+  switch(bluetoothInput) {
+    case 'o': 
+      digitalWrite(led, HIGH);
+      delay(500);
+      break;
+    case 'f': 
+      digitalWrite(led, LOW);
+      delay(500);
+      break;
+    case 's': 
+      debugSwitch = !debugSwitch;
+      break;
+  }
+
+  if (digitalRead(button) == LOW) {
+    isContinuousMode = !isContinuousMode;
+    Serial.println("Changed");
+    Serial.println(isContinuousMode);
+    delay(500);
   }
 
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet
@@ -151,40 +164,35 @@ void loop() {
       falseCounter += 1;
     }
 
-    if (isMoving && falseCounter < streamLimit && debugSwitch) {
-      mySerial.print(y);mySerial.print(",");
-      mySerial.print(p);mySerial.print(",");
-      mySerial.print(r);mySerial.print(",");
-      mySerial.print(ax);mySerial.print(",");
-      mySerial.print(ay);mySerial.print(",");
-      mySerial.print(valFingers[0]);mySerial.print(",");
-      mySerial.print(valFingers[1]);mySerial.print(",");
-      mySerial.print(valFingers[2]);mySerial.print(",");
-      mySerial.print(valFingers[3]);mySerial.print(",");
-      mySerial.print(valFingers[4]);mySerial.println();
+    if (isMoving && falseCounter < streamLimit && debugSwitch && !isContinuousMode) {
+      outputWithBluetooth();
     }
 
-    if (isMoving && falseCounter < streamLimit && !debugSwitch) {
-      Serial.print(y);Serial.print(",");
-      Serial.print(p);Serial.print(",");
-      Serial.print(r);Serial.print(",");
-      Serial.print(ax);Serial.print(",");
-      Serial.print(ay);Serial.print(",");
-      Serial.print(valFingers[0]);Serial.print(",");
-      Serial.print(valFingers[1]);Serial.print(",");
-      Serial.print(valFingers[2]);Serial.print(",");
-      Serial.print(valFingers[3]);Serial.print(",");
-      Serial.print(valFingers[4]);Serial.println();
+    if (isMoving && falseCounter < streamLimit && !debugSwitch && !isContinuousMode) {
+      outputWithComputer();
+    }
+
+    if (!debugSwitch && isContinuousMode) {
+      outputWithComputer();
+    }
+
+    if (debugSwitch && isContinuousMode) {
+      outputWithBluetooth();
     }
     
-    if (isMoving && falseCounter < streamLimit) {
+    if (isMoving && falseCounter < streamLimit && !isContinuousMode) {
       digitalWrite(led, HIGH);
       dataCountSent += 1;
-    } else {
+    } else if (!isMoving && !isContinuousMode && !falseCounter < streamLimit) {
       digitalWrite(led, LOW);
-      Serial.print("Data Sent: ");
-      Serial.println(dataCountSent);
+      // mySerial.print("Stopped");
+      // Serial.print("Data Sent: ");
+      mySerial.println(dataCountSent);
       dataCountSent = 0;
+      delay(500);
+      Serial.print("Stopped");
+    } else if (isContinuousMode) {
+      digitalWrite(led, HIGH);
     }
 
     tempYprMovement = yprMovement;
@@ -193,4 +201,32 @@ void loop() {
     
   }
 
+}
+
+void outputWithBluetooth() {
+  mySerial.print(y);mySerial.print(",");
+  mySerial.print(p);mySerial.print(",");
+  mySerial.print(r);mySerial.print(",");
+  mySerial.print(ax);mySerial.print(",");
+  mySerial.print(ay);mySerial.print(",");
+  mySerial.print(az);mySerial.print(",");
+  mySerial.print(valFingers[0]);mySerial.print(",");
+  mySerial.print(valFingers[1]);mySerial.print(",");
+  mySerial.print(valFingers[2]);mySerial.print(",");
+  mySerial.print(valFingers[3]);mySerial.print(",");
+  mySerial.println(valFingers[4]);
+}
+
+void outputWithComputer() {
+  Serial.print(y);Serial.print(",");
+  Serial.print(p);Serial.print(",");
+  Serial.print(r);Serial.print(",");
+  Serial.print(ax);Serial.print(",");
+  Serial.print(ay);Serial.print(",");
+  Serial.print(az);Serial.print(",");
+  Serial.print(valFingers[0]);Serial.print(",");
+  Serial.print(valFingers[1]);Serial.print(",");
+  Serial.print(valFingers[2]);Serial.print(",");
+  Serial.print(valFingers[3]);Serial.print(",");
+  Serial.println(valFingers[4]);
 }
