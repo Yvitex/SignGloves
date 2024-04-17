@@ -6,11 +6,11 @@
 #include <SoftwareSerial.h>
 
 // Configurations
-int toleranceRotation = 10;
-int toleranceAcc = 100;
-int toleranceFlex = 30;
-int speed = 100;
-int streamLimit = 10;
+int toleranceRotation = 20;
+int toleranceAcc = 200;
+int toleranceFlex = 20;
+int speed = 50;
+int streamLimit = 5;
 
 MPU6050 mpu;
 
@@ -50,7 +50,7 @@ float yprMovement;
 float axyMovement;
 int fingerMovement;
 int falseCounter = 0;
-char bluetoothInput;
+// char bluetoothInput;
 bool ledOn = false;
 bool isMoving = false;
 bool debugSwitch = false;
@@ -61,12 +61,12 @@ int altTxPin = 9;
 int altRxPin = 8;
 int button = 3;
 int led = 2;
-int sukunaFingers[5] = {0, 1, 2, 3, 6};
+int sukunaFingers[5] = {0, 1, 7, 3, 6};
 
-SoftwareSerial mySerial(altTxPin, altRxPin);
+// SoftwareSerial mySerial(altTxPin, altRxPin);
 
 void setup() {
-  mySerial.begin(9600);
+  // mySerial.begin(9600);
   Serial.begin(9600);
   mySerial.println("Testicle Flex");
   pinMode(led, OUTPUT);
@@ -101,31 +101,32 @@ void setup() {
 void loop() {
   delay(speed);
 
+  char bluetoothInput = '\0';
+
   if (mySerial.available()) {
     bluetoothInput = mySerial.read();
     Serial.println(bluetoothInput);
   }
 
-  switch(bluetoothInput) {
-    case 'o': 
-      digitalWrite(led, HIGH);
-      delay(500);
-      break;
-    case 'f': 
-      digitalWrite(led, LOW);
-      delay(500);
-      break;
-    case 's': 
-      debugSwitch = !debugSwitch;
-      break;
-  }
+  // switch(bluetoothInput) {
+  //   case 'o': 
+  //     digitalWrite(led, HIGH);
+  //     delay(500);
+  //     break;
+  //   case 'f': 
+  //     digitalWrite(led, LOW);
+  //     delay(500);
+  //     break;
+  //   case 's': 
+  //     debugSwitch = !debugSwitch;
+  //     break;
+  // }
 
-  if (digitalRead(button) == LOW) {
-    isContinuousMode = !isContinuousMode;
-    Serial.println("Changed");
-    Serial.println(isContinuousMode);
-    delay(500);
-  }
+  // if (digitalRead(button) == LOW) {
+  //   Serial.println("pressed");
+  //   isContinuousMode = !isContinuousMode;
+  //   delay(1000);
+  // }
 
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet
     mpu.dmpGetQuaternion(&q, fifoBuffer);
@@ -164,35 +165,35 @@ void loop() {
       falseCounter += 1;
     }
 
-    if (isMoving && falseCounter < streamLimit && debugSwitch && !isContinuousMode) {
-      outputWithBluetooth();
-    }
-
+    // if (isMoving && falseCounter < streamLimit && debugSwitch && !isContinuousMode) {
+    //   outputWithBluetooth();
+    // } 
+    
     if (isMoving && falseCounter < streamLimit && !debugSwitch && !isContinuousMode) {
       outputWithComputer();
     }
 
-    if (!debugSwitch && isContinuousMode) {
-      outputWithComputer();
-    }
+    // if (!debugSwitch && isContinuousMode) {
+    //   outputWithComputer();
+    // }
 
-    if (debugSwitch && isContinuousMode) {
-      outputWithBluetooth();
-    }
+    // if (debugSwitch && isContinuousMode) {
+    //   outputWithBluetooth();
+    // }
     
     if (isMoving && falseCounter < streamLimit && !isContinuousMode) {
       digitalWrite(led, HIGH);
       dataCountSent += 1;
-    } else if (!isMoving && !isContinuousMode && !falseCounter < streamLimit) {
+    } else if (!isMoving && !isContinuousMode && !falseCounter < streamLimit && debugSwitch) {
       digitalWrite(led, LOW);
-      // mySerial.print("Stopped");
-      // Serial.print("Data Sent: ");
-      mySerial.println(dataCountSent);
-      dataCountSent = 0;
+      mySerial.println("Stopped");
       delay(500);
-      Serial.print("Stopped");
     } else if (isContinuousMode) {
       digitalWrite(led, HIGH);
+    } else if (!isMoving && !isContinuousMode && !falseCounter < streamLimit && !debugSwitch) {
+      digitalWrite(led, LOW);
+      Serial.println("Stopped");
+      delay(500);
     }
 
     tempYprMovement = yprMovement;
